@@ -1,0 +1,11 @@
+# Image Processing
+pillow
+opencv-python
+
+# Vector Processing
+einops
+
+# GPU
+transformers
+torch 
+torchvision
