@@ -1,11 +1,15 @@
 # Image Processing
 pillow
 opencv-python
+ultralytics
 
 # Vector Processing
 einops
 
 # GPU
 transformers
-torch 
+torch
 torchvision
+
+# Text Conversion
+opencc-python-reimplemented

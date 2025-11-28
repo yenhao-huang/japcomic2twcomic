@@ -32,7 +32,7 @@ class Text_Detection_Model:
         """Load the YOLO model."""
         try:
             from ultralytics import YOLO
-            self.model = YOLO(self.model_path or 'yolov8n.pt')
+            self.model = YOLO(self.model_path or 'yolo11x.pt')
             self.model.to(self.device)
         except Exception as e:
             raise RuntimeError(f"Failed to load YOLO model: {e}")
@@ -172,8 +172,8 @@ def main():
     import os
 
     parser = argparse.ArgumentParser(description='Detect text boxes in comic images')
-    parser.add_argument('input_dir', type=str, help='Path to input image or directory')
-    parser.add_argument('output_dir', type=str, help='Output directory for visualizations')
+    parser.add_argument('--input_dir', type=str, help='Path to input image or directory')
+    parser.add_argument('--output_dir', type=str, help='Output directory for visualizations')
     parser.add_argument('--model', type=str, default=None, help='Path to YOLO model weights')
     parser.add_argument('--confidence', type=float, default=0.5, help='Confidence threshold (0-1)')
     parser.add_argument('--device', type=str, default=None, help='Device to use (cuda/cpu)')

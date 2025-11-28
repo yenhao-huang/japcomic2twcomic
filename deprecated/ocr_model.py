@@ -20,7 +20,7 @@ class OCR_Model:
     OCR model for extracting Japanese text from comic panels using PaddleOCR-VL.
     """
 
-    def __init__(self, model_path: str = "PaddlePaddle/PaddleOCR-VL"):
+    def __init__(self, model_path: str = "/tmp2/share_data/models--PaddlePaddle--PaddleOCR-VL"):
         """
         Initialize the OCR model.
 
