@@ -1,5 +1,5 @@
 """
-Image renderer for rendering translated text onto comic images.
+將翻譯後的文字渲染到漫畫圖片上的圖像渲染器
 """
 
 import json
@@ -12,15 +12,15 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class TranslatedImageRenderer:
-    """Renders translated Chinese text onto original comic images."""
+    """將翻譯後的繁體中文文字渲染到原始漫畫圖片上"""
 
     def __init__(self, font_path: Optional[str] = None, default_font_size: int = 20):
         """
-        Initialize the renderer.
+        初始化渲染器
 
         Args:
-            font_path: Path to a font file supporting Traditional Chinese
-            default_font_size: Default font size
+            font_path: 支援繁體中文的字型檔案路徑
+            default_font_size: 預設字型大小
         """
         self.font_path = font_path
         self.default_font_size = default_font_size
@@ -28,13 +28,13 @@ class TranslatedImageRenderer:
 
     def polygon_to_bbox(self, polygon: List[List[int]]) -> Tuple[int, int, int, int]:
         """
-        Convert a polygon to a bounding box.
+        將多邊形轉換為邊界框
 
         Args:
-            polygon: List of [x, y] coordinates
+            polygon: [x, y] 座標列表
 
         Returns:
-            (x1, y1, x2, y2) bounding box
+            (x1, y1, x2, y2) 邊界框
         """
         xs = [p[0] for p in polygon]
         ys = [p[1] for p in polygon]
@@ -42,16 +42,16 @@ class TranslatedImageRenderer:
 
     def render_text_on_image(self, image: np.ndarray, bounding_boxes: List[dict]) -> np.ndarray:
         """
-        Render all translated text on the image.
+        將所有翻譯文字渲染到圖片上
 
         Args:
-            image: Original image (BGR format from cv2)
-            bounding_boxes: List of bounding box dictionaries with 'box' and 'translated_text'
+            image: 原始圖片 (cv2 的 BGR 格式)
+            bounding_boxes: 包含 'box' 和 'translated_text' 的邊界框字典列表
 
         Returns:
-            Image with rendered translated text
+            渲染了翻譯文字的圖片
         """
-        # Convert to PIL for better text rendering
+        # 轉換為 PIL 格式以獲得更好的文字渲染效果
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(pil_image)
 
@@ -59,42 +59,42 @@ class TranslatedImageRenderer:
             polygon = bbox_data['box']
             translated_text = bbox_data.get('translated_text', '')
 
-            # Skip empty text
+            # 跳過空文字
             if not translated_text or not translated_text.strip():
                 continue
 
-            # Convert polygon to bounding box
+            # 將多邊形轉換為邊界框
             x1, y1, x2, y2 = self.polygon_to_bbox(polygon)
 
-            # Fill the polygon area with white background
+            # 用白色背景填充多邊形區域
             polygon_points = [(p[0], p[1]) for p in polygon]
             draw.polygon(polygon_points, fill=(255, 255, 255))
 
-            # Render the text
+            # 渲染文字
             self._render_text_in_box(draw, translated_text, (x1, y1, x2, y2))
 
-        # Convert back to cv2 format (BGR)
+        # 轉換回 cv2 格式 (BGR)
         result = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
         return result
 
     def _render_text_in_box(self, draw: ImageDraw.Draw, text: str,
                            box: Tuple[int, int, int, int]):
         """
-        Render text within a bounding box.
+        在邊界框內渲染文字
 
         Args:
-            draw: PIL ImageDraw object
-            text: Text to render
-            box: (x1, y1, x2, y2) bounding box
+            draw: PIL ImageDraw 物件
+            text: 要渲染的文字
+            box: (x1, y1, x2, y2) 邊界框
         """
         x1, y1, x2, y2 = box
         box_width = x2 - x1
         box_height = y2 - y1
 
-        # Determine if text should be vertical or horizontal
+        # 判斷文字應該垂直還是水平排列
         is_vertical = box_height > box_width * 1.5
 
-        # Calculate font size
+        # 計算字型大小
         font_size = self._calculate_font_size(text, box_width, box_height, is_vertical)
         font = self._get_font(font_size)
 
@@ -106,37 +106,37 @@ class TranslatedImageRenderer:
     def _draw_vertical_text(self, draw: ImageDraw.Draw, text: str,
                            box: Tuple[int, int, int, int], font: ImageFont.ImageFont):
         """
-        Draw text vertically (top to bottom, right to left for manga).
+        垂直繪製文字 (漫畫格式：由上到下，由右到左)
 
         Args:
-            draw: PIL ImageDraw object
-            text: Text to draw
-            box: Bounding box (x1, y1, x2, y2)
-            font: Font to use
+            draw: PIL ImageDraw 物件
+            text: 要繪製的文字
+            box: 邊界框 (x1, y1, x2, y2)
+            font: 要使用的字型
         """
         x1, y1, x2, y2 = box
         box_width = x2 - x1
         box_height = y2 - y1
 
-        # Start from right side with some padding
+        # 從右側開始，留一些邊距
         current_x = x2 - 5
         current_y = y1 + 5
 
-        # Estimate character height
+        # 估計字元高度
         char_height = font.size + 2
         chars_per_column = max(1, int(box_height / char_height))
 
         char_index = 0
         for char in text:
             if char == '\n' or char_index >= chars_per_column:
-                # Move to next column (left)
+                # 移到下一列（向左）
                 current_x -= font.size + 5
                 current_y = y1 + 5
                 char_index = 0
                 if char == '\n':
                     continue
 
-            # Don't draw if we're outside the box
+            # 如果超出邊界框則不繪製
             if current_x < x1:
                 break
 
@@ -147,19 +147,19 @@ class TranslatedImageRenderer:
     def _draw_horizontal_text(self, draw: ImageDraw.Draw, text: str,
                              box: Tuple[int, int, int, int], font: ImageFont.ImageFont):
         """
-        Draw text horizontally (left to right).
+        水平繪製文字 (由左到右)
 
         Args:
-            draw: PIL ImageDraw object
-            text: Text to draw
-            box: Bounding box (x1, y1, x2, y2)
-            font: Font to use
+            draw: PIL ImageDraw 物件
+            text: 要繪製的文字
+            box: 邊界框 (x1, y1, x2, y2)
+            font: 要使用的字型
         """
         x1, y1, x2, y2 = box
         box_width = x2 - x1
         box_height = y2 - y1
 
-        # Simple word wrapping
+        # 簡單的文字換行
         lines = []
         words = text.split()
         current_line = ""
@@ -179,11 +179,11 @@ class TranslatedImageRenderer:
         if current_line:
             lines.append(current_line)
 
-        # If text still doesn't fit, just use the whole text
+        # 如果文字仍然無法容納，就使用整段文字
         if not lines:
             lines = [text]
 
-        # Draw lines centered in box
+        # 在邊界框中居中繪製文字
         line_height = font.size + 4
         total_height = len(lines) * line_height
         current_y = y1 + (box_height - total_height) // 2
@@ -199,35 +199,35 @@ class TranslatedImageRenderer:
     def _calculate_font_size(self, text: str, box_width: int, box_height: int,
                            is_vertical: bool) -> int:
         """
-        Calculate appropriate font size.
+        計算適當的字型大小
 
         Args:
-            text: Text to render
-            box_width: Width of bounding box
-            box_height: Height of bounding box
-            is_vertical: Whether text is vertical
+            text: 要渲染的文字
+            box_width: 邊界框寬度
+            box_height: 邊界框高度
+            is_vertical: 是否為垂直文字
 
         Returns:
-            Font size
+            字型大小
         """
         if is_vertical:
-            # For vertical text, base on width and number of characters
+            # 垂直文字，基於寬度和字元數量
             size = min(int(box_width * 0.7), int(box_height / max(len(text), 1) * 1.2), 30)
         else:
-            # For horizontal text, base on height
+            # 水平文字，基於高度
             size = min(int(box_height * 0.6), int(box_width / max(len(text), 1) * 1.5), 30)
 
-        return max(size, 12)  # Minimum font size
+        return max(size, 12)  # 最小字型大小
 
     def _get_font(self, size: int) -> ImageFont.ImageFont:
         """
-        Get a font with caching.
+        取得字型（帶快取）
 
         Args:
-            size: Font size
+            size: 字型大小
 
         Returns:
-            PIL ImageFont object
+            PIL ImageFont 物件
         """
         if size in self.font_cache:
             return self.font_cache[size]
@@ -236,7 +236,7 @@ class TranslatedImageRenderer:
             if self.font_path:
                 font = ImageFont.truetype(self.font_path, size)
             else:
-                # Try common Chinese font paths
+                # 嘗試常見的中文字型路徑
                 font_paths = [
                     "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
                     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
@@ -252,10 +252,10 @@ class TranslatedImageRenderer:
                     except:
                         continue
                 else:
-                    # Fallback
+                    # 後備方案
                     font = ImageFont.load_default()
         except Exception as e:
-            print(f"Warning: Could not load font, using default: {e}")
+            print(f"警告: 無法載入字型，使用預設字型: {e}")
             font = ImageFont.load_default()
 
         self.font_cache[size] = font
@@ -265,12 +265,12 @@ class TranslatedImageRenderer:
 def process_translated_json(json_path: str, output_dir: Optional[str] = None,
                            font_path: Optional[str] = None):
     """
-    Process the translated JSON file and generate output images.
+    處理翻譯後的 JSON 檔案並生成輸出圖片
 
     Args:
-        json_path: Path to translated_sakura.json
-        output_dir: Output directory for rendered images (default: same dir as json)
-        font_path: Path to custom font file
+        json_path: translated_sakura.json 的路徑
+        output_dir: 渲染圖片的輸出目錄 (預設：與 json 相同的目錄)
+        font_path: 自訂字型檔案的路徑
     """
     json_path = Path(json_path)
 
@@ -281,66 +281,66 @@ def process_translated_json(json_path: str, output_dir: Optional[str] = None,
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load JSON
-    print(f"Loading JSON from: {json_path}")
+    # 載入 JSON
+    print(f"載入 JSON 檔案: {json_path}")
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    print(f"Found {len(data)} images to process")
+    print(f"找到 {len(data)} 張圖片需要處理")
 
-    # Initialize renderer
+    # 初始化渲染器
     renderer = TranslatedImageRenderer(font_path=font_path)
 
-    # Process each image
+    # 處理每張圖片
     for idx, item in enumerate(data):
         source_path = item['source']
         image_path = item.get('image_path', '')
         bounding_boxes = item['bounding_boxes']
 
-        print(f"\n[{idx + 1}/{len(data)}] Processing: {source_path}")
+        print(f"\n[{idx + 1}/{len(data)}] 處理中: {source_path}")
 
-        # Load original image from source path
+        # 從來源路徑載入原始圖片
         full_source_path = Path(source_path)
         if not full_source_path.exists():
-            print(f"  Warning: Source image not found: {full_source_path}")
+            print(f"  警告: 找不到來源圖片: {full_source_path}")
             continue
 
         image = cv2.imread(str(full_source_path))
         if image is None:
-            print(f"  Error: Could not read image: {full_source_path}")
+            print(f"  錯誤: 無法讀取圖片: {full_source_path}")
             continue
 
-        print(f"  Image size: {image.shape[1]}x{image.shape[0]}")
-        print(f"  Text boxes: {len(bounding_boxes)}")
+        print(f"  圖片大小: {image.shape[1]}x{image.shape[0]}")
+        print(f"  文字框數量: {len(bounding_boxes)}")
 
-        # Render translated text
+        # 渲染翻譯文字
         result_image = renderer.render_text_on_image(image, bounding_boxes)
 
-        # Generate output filename
+        # 生成輸出檔名
         output_filename = full_source_path.stem + "_translated.jpg"
         output_path = output_dir / output_filename
 
-        # Save result
+        # 儲存結果
         cv2.imwrite(str(output_path), result_image)
-        print(f"  Saved to: {output_path}")
+        print(f"  已儲存至: {output_path}")
 
-    print(f"\nAll done! Output saved to: {output_dir}")
+    print(f"\n全部完成！輸出已儲存至: {output_dir}")
 
 
 def main():
-    """Main CLI entry point."""
+    """主要 CLI 進入點"""
     parser = argparse.ArgumentParser(
-        description="Render translated text onto comic images from JSON file",
+        description="從 JSON 檔案將翻譯文字渲染到漫畫圖片上",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Basic usage (outputs to results/2/rendered/)
+範例:
+  # 基本用法 (輸出到 results/2/rendered/)
   python -m utils.image_renderer results/2/translated_sakura.json
 
-  # Specify custom output directory
+  # 指定自訂輸出目錄
   python -m utils.image_renderer results/2/translated_sakura.json -o output/
 
-  # Use custom font
+  # 使用自訂字型
   python -m utils.image_renderer results/2/translated_sakura.json -f /path/to/font.ttf
         """
     )
@@ -348,21 +348,21 @@ Examples:
     parser.add_argument(
         'json_path',
         type=str,
-        help='Path to the translated JSON file (e.g., translated_sakura.json)'
+        help='翻譯後 JSON 檔案的路徑 (例如: translated_sakura.json)'
     )
 
     parser.add_argument(
         '-o', '--output',
         type=str,
         default=None,
-        help='Output directory for rendered images (default: <json_dir>/rendered/)'
+        help='渲染圖片的輸出目錄 (預設: <json_dir>/rendered/)'
     )
 
     parser.add_argument(
         '-f', '--font',
         type=str,
         default=None,
-        help='Path to custom font file supporting Traditional Chinese'
+        help='支援繁體中文的自訂字型檔案路徑'
     )
 
     args = parser.parse_args()

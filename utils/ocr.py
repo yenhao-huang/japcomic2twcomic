@@ -28,7 +28,7 @@ class OCR:
             use_textline_orientation=False, # 通过 use_textline_orientation 参数指定不使用文本行方向分类模型
         )
         # 設置臨時目錄
-        self.tmp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tmp")
+        self.tmp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output_dir", "layout")
         os.makedirs(self.tmp_dir, exist_ok=True)
 
         # 設置最大保留的輸出目錄數量

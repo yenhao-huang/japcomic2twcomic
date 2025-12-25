@@ -3,6 +3,9 @@ pillow
 opencv-python
 ultralytics
 
+# OCR
+paddleocr
+
 # Vector Processing
 einops
 
