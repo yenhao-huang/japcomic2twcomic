@@ -1,3 +1,7 @@
 results
 tmp
 model
+PaddleOCR/
+data
+exp
+deprecated

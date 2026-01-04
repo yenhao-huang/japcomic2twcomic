@@ -1,0 +1,1 @@
+python lib/ocr/paddleocr_vl_manga.py   --input-dir data/comic_benchmark/rec/images/   --output-dir results/2_test   --task ocr
