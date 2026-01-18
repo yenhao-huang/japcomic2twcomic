@@ -15,6 +15,7 @@ import tempfile
 import shutil
 import json
 import time
+import yaml
 from pathlib import Path
 from typing import List, Tuple, Optional, Callable
 from PIL import Image
@@ -33,6 +34,17 @@ from lib.render.text_det_render import TextDetRender
 from lib.schema import LayoutOutputSchema, OcrOutputSchema, TranslationOutputSchema
 
 
+def load_pipeline_config(config_path: str = "configs/pipeline.yml") -> dict:
+    """Load pipeline configuration from YAML file"""
+    config_file = Path(config_path)
+    if not config_file.exists():
+        print(f"Warning: Config file {config_path} not found, using defaults")
+        return {}
+
+    with open(config_file, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
+
+
 class MangaTranslator:
     """
     Japanese Comic to Traditional Chinese Comic Translation Pipeline
@@ -40,27 +52,47 @@ class MangaTranslator:
 
     def __init__(
         self,
-        yolo_model_path: str = "/tmp2/share_data/manga109-segmentation-bubble/best.pt",
-        text_det_model_dir: str = "PaddleOCR/output/inference/PP-OCRv5_comic_det_infer/",
-        ocr_model_path: str = "/tmp2/share_data/PaddleOCR-VL-For-Manga",
-        translation_model_path: str = "/tmp2/share_data/HY-MT1.5-7B",
-        prompt_config: str = "configs/translation_prompt/hunyuan_default.yml",
+        config_path: str = "configs/pipeline.yml",
+        **kwargs
     ):
         """
         Initialize all models
 
         Args:
-            yolo_model_path: Path to YOLO segmentation model
-            text_det_model_dir: Path to text detection model
-            ocr_model_path: Path to OCR model
-            translation_model_path: Path to translation model
-            prompt_config: Path to translation prompt config
+            config_path: Path to pipeline configuration YAML file
+            **kwargs: Override config values (yolo_model_path, text_det_model_dir, etc.)
         """
-        self.yolo_model_path = yolo_model_path
-        self.text_det_model_dir = text_det_model_dir
-        self.ocr_model_path = ocr_model_path
-        self.translation_model_path = translation_model_path
-        self.prompt_config = prompt_config
+        # Load config from YAML
+        config = load_pipeline_config(config_path)
+        models_config = config.get('models', {})
+        translation_config = config.get('translation', {})
+        renderer_config = config.get('renderer', {})
+        text_allocater_config = config.get('text_allocater', {})
+
+        # Model paths (can be overridden by kwargs)
+        self.yolo_model_path = kwargs.get('yolo_model_path',
+            models_config.get('yolo_model_path', "/tmp2/share_data/manga109-segmentation-bubble/best.pt"))
+        self.text_det_model_dir = kwargs.get('text_det_model_dir',
+            models_config.get('text_det_model_dir', "PaddleOCR/output/inference/PP-OCRv5_comic_det_infer/"))
+        self.ocr_model_path = kwargs.get('ocr_model_path',
+            models_config.get('ocr_model_path', "/tmp2/share_data/PaddleOCR-VL-For-Manga"))
+        self.translation_model_path = kwargs.get('translation_model_path',
+            models_config.get('translation_model_path', "/tmp2/share_data/HY-MT1.5-7B"))
+        self.prompt_config = kwargs.get('prompt_config',
+            translation_config.get('prompt_config', "configs/translation_prompt/hunyuan_default.yml"))
+
+        # Renderer config
+        self.renderer_config = {
+            'font_path': kwargs.get('font_path', renderer_config.get('font_path')),
+            'default_font_size': kwargs.get('default_font_size', renderer_config.get('default_font_size', 20)),
+            'inpaint_shrink_ratio': kwargs.get('inpaint_shrink_ratio', renderer_config.get('inpaint_shrink_ratio', 0.8)),
+            'default_is_vertical': kwargs.get('default_is_vertical', renderer_config.get('default_is_vertical', True)),
+            'min_font_size': kwargs.get('min_font_size', renderer_config.get('min_font_size', 15)),
+        }
+
+        # Text allocater config
+        self.split_strategy = kwargs.get('split_strategy',
+            text_allocater_config.get('split_strategy', "region_newline"))
 
         # Lazy loading - models will be loaded on first use
         self._yolo_model = None
@@ -109,10 +141,7 @@ class MangaTranslator:
     def renderer(self):
         if self._renderer is None:
             print("Initializing renderer...")
-            self._renderer = TextDetRender(
-                default_is_vertical=True,
-                min_font_size=15,
-            )
+            self._renderer = TextDetRender(**self.renderer_config)
         return self._renderer
 
     def _step_text_mask_detection(
@@ -239,7 +268,7 @@ class MangaTranslator:
             translation_json_path=str(translation_json_path),
             text_region_json_path=str(text_region_json_path),
             output_path=str(text_allocate_output_path),
-            split_strategy="region_newline"
+            split_strategy=self.split_strategy
         )
         allocate_results = allocater.run()
 
@@ -412,15 +441,6 @@ class MangaTranslator:
 def create_gradio_interface():
     """Create and return the Gradio interface"""
 
-    # Initialize translator (models will be loaded lazily)
-    translator = None
-
-    def initialize_translator():
-        nonlocal translator
-        if translator is None:
-            translator = MangaTranslator()
-        return translator
-
     def translate_manga(image, progress=gr.Progress()):
         """
         Main translation function for Gradio interface
@@ -485,31 +505,37 @@ def create_gradio_interface():
             error_msg = f"Error: {str(e)}\n\n{traceback.format_exc()}"
             return None, error_msg
 
+    # Pre-load all models at startup
+    print("=" * 60)
+    print("Pre-loading all models at startup...")
+    print("=" * 60)
+    translator = MangaTranslator()
+    # Access each model to trigger loading
+    _ = translator.yolo_model
+    _ = translator.text_det_model
+    _ = translator.ocr_model
+    _ = translator.translation_model
+    _ = translator.renderer
+    print("=" * 60)
+    print("All models loaded successfully!")
+    print("=" * 60)
+
+    def initialize_translator():
+        return translator
+
     # Create Gradio interface
     with gr.Blocks(
         title="Japanese Comic to Traditional Chinese Translator",
         theme=gr.themes.Soft()
     ) as demo:
-        gr.Markdown("""
-        # Japanese Comic to Traditional Chinese Comic Translator
-
-        Upload a Japanese manga/comic image and get it translated to Traditional Chinese.
-
-        ## Pipeline:
-        1. **Text Mask Detection** - YOLO segmentation to detect text bubbles
-        2. **Text Detection** - PPOCRv5 to detect text bounding boxes
-        3. **OCR Recognition** - PaddleOCR-VL to recognize Japanese text
-        4. **Translation** - Hunyuan-MT to translate to Chinese
-        5. **Text Region Refinement** - Allocate translated text to regions
-        6. **Render** - Render translated text onto the image
-        """)
+        gr.Markdown("# Japanese Comic to Traditional Chinese Comic Translator")
 
         with gr.Row():
             with gr.Column():
                 input_image = gr.Image(
                     label="Upload Manga Image",
                     type="pil",
-                    height=500
+                    height=700
                 )
                 translate_btn = gr.Button(
                     "Translate",
@@ -521,7 +547,7 @@ def create_gradio_interface():
                 output_image = gr.Image(
                     label="Translated Image",
                     type="pil",
-                    height=500
+                    height=700
                 )
 
         with gr.Row():
@@ -550,9 +576,13 @@ def create_gradio_interface():
 
 
 if __name__ == "__main__":
+    # Load server config
+    config = load_pipeline_config()
+    server_config = config.get('server', {})
+
     demo = create_gradio_interface()
     demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False
+        server_name=server_config.get('server_name', "0.0.0.0"),
+        server_port=server_config.get('server_port', 7860),
+        share=server_config.get('share', False)
     )

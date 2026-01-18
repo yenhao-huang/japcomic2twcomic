@@ -32,7 +32,7 @@ class TextDetRender:
         self,
         font_path: Optional[str] = None,
         default_font_size: int = 20,
-        inpaint_shrink_ratio: float = 1.0,
+        inpaint_shrink_ratio: float = 0.8,
         default_is_vertical: bool = True,
         min_font_size: int = 12
     ):
@@ -297,6 +297,50 @@ class TextDetRender:
 
         return Image.fromarray(img_array)
 
+    def _apply_inpaint_by_bbox(self, img: Image.Image, bboxes: List[AllocatedBoundingBox]) -> Image.Image:
+        """
+        直接根據 bounding box 將區域填白 (Inpaint)
+        不使用 segmentation mask，直接填白整個 bbox 區域
+
+        Args:
+            img: PIL Image
+            bboxes: 文字框列表
+
+        Returns:
+            填白後的 PIL Image
+        """
+        img_array = np.array(img)
+
+        # 如果沒有 bbox，直接返回原圖
+        if len(bboxes) == 0:
+            return img
+
+        for bbox in bboxes:
+            # box 格式: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] (左上, 右上, 右下, 左下)
+            box = bbox['box']
+            xs = [p[0] for p in box]
+            ys = [p[1] for p in box]
+            x1 = max(0, int(min(xs)))
+            y1 = max(0, int(min(ys)))
+            x2 = min(img_array.shape[1], int(max(xs)))
+            y2 = min(img_array.shape[0], int(max(ys)))
+
+            # 如果設定了縮小比例，縮小填白範圍
+            if self.inpaint_shrink_ratio < 1.0:
+                width = x2 - x1
+                height = y2 - y1
+                shrink_x = int(width * (1 - self.inpaint_shrink_ratio) / 2)
+                shrink_y = int(height * (1 - self.inpaint_shrink_ratio) / 2)
+                x1 += shrink_x
+                y1 += shrink_y
+                x2 -= shrink_x
+                y2 -= shrink_y
+
+            # 填白該 bbox 區域
+            img_array[y1:y2, x1:x2] = [255, 255, 255]
+
+        return Image.fromarray(img_array)
+
     def _apply_inpaint_with_bbox(self, img: Image.Image, seg_mask: np.ndarray, bboxes: List[AllocatedBoundingBox]) -> Image.Image:
         """
         根據 segmentation mask 將區域填白 (Inpaint)
@@ -470,7 +514,7 @@ class TextDetRender:
         # 計算每列可容納的字元數
         char_height = font.size + 4
         chars_per_column = max(1, int((box_height - 2 * padding) / char_height))
-        print(chars_per_column)
+
         # 將文字分成多列
         lines = []
         temp_line = ""
@@ -484,7 +528,7 @@ class TextDetRender:
             temp_line += char
         if temp_line:
             lines.append(temp_line)
-        print(lines)
+
         # 計算實際需要的總寬度
         column_width = font.size + 8
         total_text_width = len(lines) * column_width - 8  # 最後一列不需要間距

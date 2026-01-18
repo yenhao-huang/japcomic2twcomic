@@ -1,0 +1,53 @@
+# Manga Translation Pipeline Configuration
+# ==========================================
+
+# Model paths
+models:
+  # YOLO segmentation model for text mask detection
+  yolo_model_path: "/tmp2/share_data/manga109-segmentation-bubble/best.pt"
+
+  # PPOCRv5 text detection model directory
+  text_det_model_dir: "PaddleOCR/output/inference/PP-OCRv5_comic_det_infer/"
+
+  # PaddleOCR-VL model for OCR recognition
+  ocr_model_path: "/tmp2/share_data/PaddleOCR-VL-For-Manga"
+
+  # Hunyuan translation model
+  translation_model_path: "/tmp2/share_data/HY-MT1.5-7B"
+
+# Translation settings
+translation:
+  # Path to translation prompt config
+  prompt_config: "configs/translation_prompt/hunyuan_default.yml"
+
+# Renderer settings
+renderer:
+  # Custom font path (null for default)
+  font_path: null
+
+  # Default font size
+  default_font_size: 20
+
+  # Inpaint shrink ratio (0.0-1.0)
+  # - 1.0: Use full mask area
+  # - 0.8: Shrink 20% to avoid painting outside borders
+  inpaint_shrink_ratio: 0.8
+
+  # Default text direction
+  # - true: Vertical (Japanese manga, Hong Kong comics)
+  # - false: Horizontal (American comics, Korean manhwa)
+  default_is_vertical: true
+
+  # Minimum font size limit
+  min_font_size: 15
+
+# Text allocater settings
+text_allocater:
+  # Split strategy: "region_newline"
+  split_strategy: "region_newline"
+
+# Gradio server settings
+server:
+  server_name: "0.0.0.0"
+  server_port: 7860
+  share: false
