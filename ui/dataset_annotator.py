@@ -275,12 +275,12 @@ def create_ui():
                     gr.Markdown("### 1️⃣ Configuration")
                     image_dir_input = gr.Textbox(
                         label="Image Directory",
-                        value="data/comic_benchmark/images",
+                        value="data/comic_benchmark/det/images",
                         placeholder="path/to/images"
                     )
                     output_file_input = gr.Textbox(
                         label="Output Annotations File",
-                        value="data/comic_benchmark/annotations.txt",
+                        value="data/comic_benchmark/det/annotations.txt",
                         placeholder="path/to/annotations.txt"
                     )
                     load_btn = gr.Button("📂 Load Images", variant="primary")

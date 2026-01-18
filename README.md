@@ -4,35 +4,53 @@ source ../venv_manager/ocr/bin/activate
 
 ## II. Pipeline2: pixel-level inpaint
 
-1. detect bbox and segmentation mask and cropping
+1. get segmentation mask and cropping
 layout/yolo.py
 
 input data/2
 output results/layout/yolo/layout.json, results/layout/yolo/cropped_dir
+```bash
+python -m lib.text_mask.yolo --input_dir data/2 --output_dir results/text_mask/2
+```
+2. detect bbox
+```bash
+python -m lib.text_detection.ppocrv5 --text-det-model-dir PaddleOCR/output/inference/PP-OCRv5_comic_det_infer/ --input-dir data/2/ --output-dir results/text_detection/2/ 
+```
+3. recognition text by OCR engine 
 
-python -m lib.layout.yolo --input_dir data/2
+```bash
+python -m lib.ocr.paddleocr_vl_manga   --layout-json results/text_mask/2/text_mask.json --output-dir results/ocr/2
+```
 
-2. ocr module: input layout outpu text
-call lib.ocr.paddleocr_vl_manga.py
-input:  results/layout/yolo/layout.json
-output: results/ocr/paddleocr_vl_manga.json
+4. translation
+```bash
+python -m lib.translation.hunyuan --input_path results/ocr/2/ocr.json --output_path results/translation/2/hunyuan.json
+```
 
-python -m lib.ocr.paddleocr_vl_manga   --layout-json results/layout/yolo/layout.json --output-dir results/ocr/
+5. text region refinement 
+從 segmentation 取得 bbox 太過粗糙，更精細化
 
-3. translation
-call lib/translation/hunyuan.py
-input: results/ocr/ocr.json
-output: results/translation/hunyuan.json
+```bash
+python -m lib.text_allocater.text_allocater --translation-json results/translation/2/hunyuan.json --text-region-json results/text_detection/2/text_region.json --output results/text_allocate/2/text_allocate.json --split-strategy region_newline
+```
 
-python -m lib.translation.hunyuan --input_path results/ocr/paddleocrvl_layout.json --output_path results/translation/hunyuan.json
+6. render
+畫圖、inpaint
 
-4. render
-call lib/render/image_render.py
-input: results/translation/hunyuan.json
-output: results/render/
+```bash
+python -m lib.render.text_det_render     --text_mask results/text_mask/2/text_mask.json     --allocated_text results/text_allocate/2/text_allocate.json  --output results/render/2/
+```
 
-python -m lib.render.layout_render     --layout results/layout/yolo/layout.json     --translation results/translation/hunyuan.json     --output results/render/     --font lib/utils/fonts/Noto_Sans_CJ
-K_Regular.otf
+7. 可視化 (Optional)
+
+python -m lib.utils.draw_bbox_on_render \
+    --render_dir results/render/ \
+    --text_allocate results/text_allocate/text_allocate.json \
+    --output results/render/render_with_bbox/
+
+python -m lib.utils.draw_translated_text_bbox_on_image \
+    --translation results/translation/hunyuan.json \
+    --output results/translation/translation_bbox/
 
 ## I. Pipeline1: region-level inpaint
 
@@ -88,7 +106,11 @@ cd PaddleOCR
 
 # 1. Prepare Dataset
 python ui/dataset_annotator.py
+python core/split_dataset.py --input data/comic_benchmark/det/annotations.txt --output data/comic_benchmark/det
+cp -r data/comic_benchmark/det PaddleOCR/comic_benchmark
+
 # 2 Download the PP-OCRv5_server_det pre-trained model
+cd PaddleOCR
 wget https://paddle-model-ecology.bj.bcebos.com/paddlex/official_pretrained_model/PP-OCRv5_server_det_pretrained.pdparams
 
 # 3. Model Fine-tune
@@ -98,6 +120,15 @@ python3 tools/train.py -c configs/det/PP-OCRv5/PP-OCRv5_comic_det.yml \
     Train.dataset.label_file_list='[./comic_benchmark/det/train.txt]' \
     Eval.dataset.data_dir=./comic_benchmark/det \
     Eval.dataset.label_file_list='[./comic_benchmark/det/val.txt]'
+
+
+python3 tools/train.py -c configs/det/PP-OCRv5/PP-OCRv5_comic_det.yml \
+    -o Global.pretrained_model=./PP-OCRv5_server_det_pretrained.pdparams \
+    Train.dataset.data_dir=./comic_benchmark/det-example \
+    Train.dataset.label_file_list='[./comic_benchmark/det/train.txt]' \
+    Eval.dataset.data_dir=./comic_benchmark/det \
+    Eval.dataset.label_file_list='[./comic_benchmark/det/val.txt]'
+
 
 # 4. Model Export
 python3 tools/export_model.py -c configs/det/PP-OCRv5/PP-OCRv5_comic_det.yml -o \

@@ -31,6 +31,34 @@ PROMPTS: Dict[TaskType, str] = {
 class PaddleOCRVLMANGA:
     """PaddleOCR-VL using Transformers for OCR and document understanding tasks"""
 
+    @staticmethod
+    def _get_best_attn_implementation() -> str:
+        """
+        Determine the best available attention implementation.
+
+        Returns:
+            str: One of 'flash_attention_2', 'sdpa', or 'eager'
+        """
+        # Try flash_attention_2 first
+        try:
+            import flash_attn
+            # Test if flash_attn actually works by checking the module
+            from flash_attn import flash_attn_varlen_func
+            return "flash_attention_2"
+        except (ImportError, OSError, Exception) as e:
+            print(f"   ⚠️ Flash Attention not available: {e}")
+
+        # Try SDPA (Scaled Dot Product Attention) - available in PyTorch 2.0+
+        try:
+            if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+                return "sdpa"
+        except Exception:
+            pass
+
+        # Fallback to eager (standard attention)
+        print("   ⚠️ Using eager attention (slower)")
+        return "eager"
+
     def __init__(
         self,
         model_path: str = "./paddleocr-vl-finetuned",
@@ -62,12 +90,16 @@ class PaddleOCRVLMANGA:
         # Suppress the config logging that causes JSON serialization error
         logging.getLogger("transformers.configuration_utils").setLevel(logging.ERROR)
 
+        # Try flash_attention_2 first, fallback to sdpa or eager if not available
+        attn_impl = self._get_best_attn_implementation()
+        print(f"   Attention implementation: {attn_impl}")
+
         self.model = (
             AutoModelForCausalLM.from_pretrained(
                 model_path,
                 trust_remote_code=True,
                 torch_dtype=torch.bfloat16,
-                attn_implementation="flash_attention_2",
+                attn_implementation=attn_impl,
             )
             .to(self.device)
             .eval()
@@ -163,12 +195,8 @@ class PaddleOCRVLMANGA:
                 }
                 results.append(result)
             except Exception as e:
-                error_result: OcrErrorSchema = {
-                    "source": str(image_path),
-                    "error": str(e)
-                }
-                results.append(error_result)
                 print(f"❌ Error processing {image_path}: {e}")
+                raise
 
         return results
 
@@ -251,6 +279,48 @@ class PaddleOCRVLMANGA:
             [x1, y2]   # 左下
         ]
 
+    def _merge_segmentation_info(
+        self,
+        ocr_results: List[Union[OcrOutputSchema, OcrErrorSchema]],
+        region_info: List[tuple]
+    ) -> List[Union[OcrOutputSchema, OcrErrorSchema]]:
+        """
+        將 OCR 結果與 bounding box 資訊合併
+
+        Args:
+            ocr_results: OCR 辨識結果列表
+            region_info: 區域資訊列表 [(cropped_path, box, source)]
+
+        Returns:
+            合併後的 OCR 結果，包含 bounding box 資訊
+        """
+        results: List[Union[OcrOutputSchema, OcrErrorSchema]] = []
+
+        for idx, ocr_result in enumerate(ocr_results):
+            if "error" in ocr_result:
+                results.append(ocr_result)
+                continue
+
+            # Get corresponding box from layout data
+            _, box_2points, source = region_info[idx]
+
+            # Convert 2-point box to 4-point box
+            box_4points = self._box_2points_to_4points(box_2points)
+
+            # Update source to use the original image source from layout data
+            ocr_result["source"] = source
+
+            # Add bounding box information to OCR result
+            ocr_result["bounding_boxes"] = [{
+                "box": box_4points,
+                "text": ocr_result["text"],
+                "score": None  # PaddleOCR-VL doesn't provide confidence scores
+            }]
+
+            results.append(ocr_result)
+
+        return results
+
     def process_layout_regions(
         self, layout_data: List[LayoutOutputSchema], show_progress: bool = True
     ) -> List[Union[OcrOutputSchema, OcrErrorSchema]]:
@@ -290,25 +360,7 @@ class PaddleOCRVLMANGA:
         ocr_results = self.predict_batch(image_paths, show_progress=show_progress)
 
         # Merge OCR results with bbox information
-        for idx, ocr_result in enumerate(ocr_results):
-            if "error" in ocr_result:
-                results.append(ocr_result)
-                continue
-
-            # Get corresponding box from layout data
-            _, box_2points, source = region_info[idx]
-
-            # Convert 2-point box to 4-point box
-            box_4points = self._box_2points_to_4points(box_2points)
-
-            # Add bounding box information to OCR result
-            ocr_result["bounding_boxes"] = [{
-                "box": box_4points,
-                "text": ocr_result["text"],
-                "score": None  # PaddleOCR-VL doesn't provide confidence scores
-            }]
-
-            results.append(ocr_result)
+        results = self._merge_segmentation_info(ocr_results, region_info)
 
         return results
 
@@ -435,7 +487,7 @@ def process_layout_json(ocr: PaddleOCRVLMANGA, args):
     # Save results
     if args.output_dir:
         os.makedirs(args.output_dir, exist_ok=True)
-        output_path = os.path.join(args.output_dir, f"paddleocrvl_layout.json")
+        output_path = os.path.join(args.output_dir, f"ocr.json")
 
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)

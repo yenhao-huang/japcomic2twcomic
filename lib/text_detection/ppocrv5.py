@@ -6,6 +6,7 @@ os.environ['FLAGS_fast_eager_deletion_mode'] = '1'
 
 from paddleocr import PaddleOCR
 import base64
+from lib.utils.check_input_format import check_input_format
 from io import BytesIO
 from PIL import Image
 import argparse
@@ -106,14 +107,14 @@ class OCR:
 
     def load_directory(self, directory_path, recursive=True):
         """
-        載入目錄中的所有圖片檔案
+        載入目錄中的所有 .jpg 圖片檔案
 
         Args:
             directory_path: 圖片目錄路徑
             recursive: 是否遞迴搜尋子目錄（預設為 True）
 
         Returns:
-            list[str]: 圖片檔案路徑列表
+            list[str]: 圖片檔案路徑列表（僅 .jpg 檔案）
         """
         if not os.path.exists(directory_path):
             raise FileNotFoundError(f"目錄不存在：{directory_path}")
@@ -121,22 +122,20 @@ class OCR:
         if not os.path.isdir(directory_path):
             raise NotADirectoryError(f"路徑不是目錄：{directory_path}")
 
-        # 支援的圖片格式
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
-
         image_paths = []
 
         if recursive:
             # 遞迴搜尋所有子目錄
             for root, dirs, files in os.walk(directory_path):
                 for file in sorted(files):
-                    if os.path.splitext(file.lower())[1] in image_extensions:
-                        image_paths.append(os.path.join(root, file))
+                    file_path = os.path.join(root, file)
+                    if check_input_format(file_path):
+                        image_paths.append(file_path)
         else:
             # 只搜尋當前目錄
             for file in sorted(os.listdir(directory_path)):
                 file_path = os.path.join(directory_path, file)
-                if os.path.isfile(file_path) and os.path.splitext(file.lower())[1] in image_extensions:
+                if os.path.isfile(file_path) and check_input_format(file_path):
                     image_paths.append(file_path)
 
         return image_paths
@@ -161,7 +160,6 @@ class OCR:
 
             try:
                 result = self.predict(image_input)
-                result['source'] = image_input if isinstance(image_input, str) else f'image_{idx}'
                 results.append(result)
             except Exception as e:
                 print(f"⚠️  處理失敗：{image_input if isinstance(image_input, str) else f'image_{idx}'}, 錯誤：{e}")
@@ -207,16 +205,25 @@ class OCR:
                 res.save_to_img(save_path=ocr_output_dir)
 
             # 提取文字內容
-            json_files = glob.glob(os.path.join(ocr_output_dir, "*.json"))
-            if not json_files:
-                raise FileNotFoundError(f"No JSON files found in {ocr_output_dir}")
+            # 根據輸入圖片的檔名找到對應的 JSON 結果
+            img_basename = os.path.splitext(os.path.basename(img_path))[0]
+            expected_json = os.path.join(ocr_output_dir, f"{img_basename}_res.json")
 
-            with open(json_files[0], 'r', encoding='utf-8') as f:
+            if not os.path.exists(expected_json):
+                # 如果找不到對應的 JSON 檔，嘗試找所有 JSON 檔並使用最新的
+                json_files = sorted(glob.glob(os.path.join(ocr_output_dir, "*.json")), key=os.path.getmtime, reverse=True)
+                if not json_files:
+                    raise FileNotFoundError(f"No JSON files found in {ocr_output_dir}")
+                expected_json = json_files[0]
+                print(f"⚠️ 警告：找不到 {img_basename}_res.json，使用最新的 JSON: {os.path.basename(expected_json)}")
+
+            with open(expected_json, 'r', encoding='utf-8') as f:
                 json_result = json.load(f)
 
-            
-            # 提取圖片連結
-            result_image_path = sorted([f for f in os.listdir(ocr_output_dir) if f.endswith(tuple(['.jpg', '.jpeg', '.png']))])[0]
+
+            # 提取圖片連結（使用最新修改的圖片）
+            result_images = sorted([f for f in os.listdir(ocr_output_dir) if f.endswith(tuple(['.jpg', '.jpeg', '.png']))], key=lambda x: os.path.getmtime(os.path.join(ocr_output_dir, x)), reverse=True)
+            result_image_path = result_images[0] if result_images else None
 
             # 提取 bounding boxes
             bounding_boxes = []
@@ -228,10 +235,10 @@ class OCR:
                         "score": json_result["rec_scores"][i] if "rec_scores" in json_result and i < len(json_result["rec_scores"]) else None
                     }
                     bounding_boxes.append(bbox_info)
-
+            print(image_input)
             response = {
                 "text": "\n".join(json_result["rec_texts"]),
-                "image_path": result_image_path,
+                "image_path": image_input,
                 "bounding_boxes": bounding_boxes
             }
 
@@ -340,7 +347,7 @@ def main():
         # 儲存結果為 JSON 檔
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
-            results_json_path = os.path.join(args.output_dir, "ocr.json")
+            results_json_path = os.path.join(args.output_dir, "text_region.json")
             with open(results_json_path, 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
             print(f"\n💾 批次結果已儲存至：{results_json_path}")

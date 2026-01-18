@@ -1,7 +1,13 @@
+.claude
 results
 tmp
 model
 PaddleOCR/
-data
+data/*
 exp
 deprecated
+**/__pycache__/
+**/**/__pycache__/
+tests/testcases
+
+!.gitkeep
