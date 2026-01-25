@@ -1,14 +1,17 @@
 .claude
-results
-tmp
-model
-PaddleOCR/
-data/*
-exp
-output_dir
-deprecated
+/results/
+/tmp/
+ui/tmp/
+/model/
+/PaddleOCR/
+/data/*
+/exp/
+output_dir/
+/deprecated/
 **/__pycache__/
 **/**/__pycache__/
-tests/testcases
+/tests/testcases
+/tests/results
+/docs/
 
 !.gitkeep
