@@ -1,4 +1,4 @@
-# Japanese Manga to Traditional Chinese Translation Pipeline
+# Japanese Manga to Traditional Chinese Pipeline
 
 An automated pipeline for translating Japanese manga to Traditional Chinese using state-of-the-art computer vision and NLP models.
 
