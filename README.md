@@ -2,6 +2,18 @@
 
 An automated pipeline for translating Japanese manga to Traditional Chinese using state-of-the-art computer vision and NLP models.
 
+## Results
+
+### Translation Examples
+
+| Source  | Translated  |
+|:------------:|:-------------------:|
+| ![](metadata/images/src/1.jpg) | ![](metadata/images/target/1.webp) |
+| ![](metadata/images/src/2.jpg) | ![](metadata/images/target/2.webp) |
+| ![](metadata/images/src/3.jpg) | ![](metadata/images/target/3.webp) |
+| ![](metadata/images/src/4.jpg) | ![](metadata/images/target/4.webp) |
+
+
 ## System Architecture
 
 The pipeline consists of 6 major stages:
@@ -230,17 +242,19 @@ python -m lib.utils.draw_translated_text_bbox_on_image \
 ### Fine-tune Detection Module
 
 ```bash
+# 0. Setup environment
+git clone https://github.com/PaddlePaddle/PaddleOCR
 cd PaddleOCR
 
-# 1. Prepare Dataset
+# 1. Prepare dataset
 python ui/dataset_annotator.py
-python core/split_dataset.py --input data/comic_benchmark/det/annotations.txt --output data/comic_benchmark/det
+python core/prep_benchmark/prep_det_benchmark.py --input data/comic_benchmark/det/annotations.txt --output_dir data/comic_benchmark/det
 cp -r data/comic_benchmark/det PaddleOCR/comic_benchmark
 
 # 2. Download the PP-OCRv5_server_det pre-trained model
 wget https://paddle-model-ecology.bj.bcebos.com/paddlex/official_pretrained_model/PP-OCRv5_server_det_pretrained.pdparams
 
-# 3. Model Fine-tune
+# 3. Model fine-tune
 python3 tools/train.py -c configs/det/PP-OCRv5/PP-OCRv5_comic_det.yml \
     -o Global.pretrained_model=./PP-OCRv5_server_det_pretrained.pdparams \
     Train.dataset.data_dir=./comic_benchmark/det \
@@ -248,7 +262,7 @@ python3 tools/train.py -c configs/det/PP-OCRv5/PP-OCRv5_comic_det.yml \
     Eval.dataset.data_dir=./comic_benchmark/det \
     Eval.dataset.label_file_list='[./comic_benchmark/det/val.txt]'
 
-# 4. Model Export
+# 4. Model export
 python3 tools/export_model.py -c configs/det/PP-OCRv5/PP-OCRv5_comic_det.yml -o \
     Global.pretrained_model=output/PP-OCRv5_comic_det/latest.pdparams \
     Global.save_inference_dir="output/inference/PP-OCRv5_comic_det_infer/"
@@ -265,7 +279,7 @@ Prepare OCR ground truth:
 python ui/dataset_annotator.py
 
 # 2. Convert to corresponding format
-python3 core/ocr_gt_converter.py  \
+python3 core/prep_benchmark/ocr_gt_converter.py  \
     --input data/comic_benchmark/det/annotations.txt \
     --output data/benchmark/ocr_groundtruth
 ```

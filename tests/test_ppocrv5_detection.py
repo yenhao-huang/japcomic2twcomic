@@ -9,7 +9,7 @@ from pathlib import Path
 # 添加專案根目錄到路徑
 sys.path.append(str(Path(__file__).parent.parent))
 
-from lib.ocr.paddleocrv5 import OCR
+from lib.ocr.ppocr import OCR
 import argparse
 
 
