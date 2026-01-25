@@ -247,6 +247,9 @@ class TextDetRender:
             return
 
         img = Image.open(source_path)
+        # 確保圖片為 RGB 模式，避免灰階圖片在繪製文字時出現顏色格式錯誤
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
         print(f"  圖片大小: {img.size}")
         print(f"  文字框數量: {len(bboxes)}")
 
@@ -293,7 +296,19 @@ class TextDetRender:
             mask = self._shrink_mask(mask, self.inpaint_shrink_ratio)
 
         # 填白 (將 mask > 0 的區域設為白色)
-        img_array[mask > 0] = [255, 255, 255]
+        # 處理不同通道數的圖片
+        if len(img_array.shape) == 2:
+            # 灰階圖片
+            img_array[mask > 0] = 255
+        elif img_array.shape[2] == 1:
+            # 單通道圖片
+            img_array[mask > 0] = [255]
+        elif img_array.shape[2] == 3:
+            # RGB 圖片
+            img_array[mask > 0] = [255, 255, 255]
+        elif img_array.shape[2] == 4:
+            # RGBA 圖片
+            img_array[mask > 0] = [255, 255, 255, 255]
 
         return Image.fromarray(img_array)
 
@@ -336,8 +351,15 @@ class TextDetRender:
                 x2 -= shrink_x
                 y2 -= shrink_y
 
-            # 填白該 bbox 區域
-            img_array[y1:y2, x1:x2] = [255, 255, 255]
+            # 填白該 bbox 區域 (處理不同通道數的圖片)
+            if len(img_array.shape) == 2:
+                img_array[y1:y2, x1:x2] = 255
+            elif img_array.shape[2] == 1:
+                img_array[y1:y2, x1:x2] = [255]
+            elif img_array.shape[2] == 3:
+                img_array[y1:y2, x1:x2] = [255, 255, 255]
+            elif img_array.shape[2] == 4:
+                img_array[y1:y2, x1:x2] = [255, 255, 255, 255]
 
         return Image.fromarray(img_array)
 
@@ -390,8 +412,15 @@ class TextDetRender:
         # 只保留與 bbox 重疊的 mask 區域
         final_mask = (mask > 0) & (bbox_mask > 0)
 
-        # 填白 (將 final_mask 為 True 的區域設為白色)
-        img_array[final_mask] = [255, 255, 255]
+        # 填白 (將 final_mask 為 True 的區域設為白色，處理不同通道數)
+        if len(img_array.shape) == 2:
+            img_array[final_mask] = 255
+        elif img_array.shape[2] == 1:
+            img_array[final_mask] = [255]
+        elif img_array.shape[2] == 3:
+            img_array[final_mask] = [255, 255, 255]
+        elif img_array.shape[2] == 4:
+            img_array[final_mask] = [255, 255, 255, 255]
 
         return Image.fromarray(img_array)
 

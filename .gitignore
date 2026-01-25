@@ -5,6 +5,7 @@ model
 PaddleOCR/
 data/*
 exp
+output_dir
 deprecated
 **/__pycache__/
 **/**/__pycache__/
